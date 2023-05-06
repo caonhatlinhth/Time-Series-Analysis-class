@@ -1,0 +1,171 @@
+---
+title: "STAT-645-673: Homework 1  (Group 1 - Linh Cao, Manjiri Gujar, Swati Mambilavil & Colin Quinn )"
+output: html_document
+date: "April 20th 2023"
+---
+
+```{r GlobalOptions}
+options(knitr.duplicate.label = 'allow')
+```
+ 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httpuv)
+library(caTools)
+library(fpp3)
+library(USgas)
+library(ggplot2)
+library(tsibble)
+```
+
+
+## Question 2.1
+
+Explore the following four time series: Bricks from aus_production, 
+Lynx from pelt, Close from gafa_stock, Demand from vic_elec.
+
+- Use ? (or help( )) to find out about the data in each series.
+```
+help(aus_production)
+help(pelt)
+help(gafa_stock)
+help(vic_elec)
+```
+
+- What is the time interval of each series?
+```
+aus_production
+pelt
+gafa_stock
+vic_elec
+```
+a. The time interval for "aus_production" is 1 Quarter (1Q)
+b. The time interval for "pelt" is 1 Year (1Y)
+c. The time interval for "gafa_stock" is 1 Day - but it is determined to be irregular ([!]) - 
+d. The time interval for "vic_elec" is 30 Minutes (30m)
+
+- Use autoplot( ) to produce a time plot of each series.
+
+``` {r fpp3, echo = TRUE}
+aus_production %>%
+  autoplot(Bricks) 
+
+pelt %>%
+  autoplot(Lynx) 
+
+gafa_stock %>%
+  autoplot(Close) +
+  labs() 
+
+vic_elec %>%
+  autoplot(Demand) 
+```
+
+- For the last plot, modify the axis labels and title.
+
+``` {r fpp3_1, echo = TRUE}
+vic_elec %>%
+  autoplot(Demand) +
+  labs(
+    title = "Time Plot for Electricity Demand in Victoria, Australia",
+    y = "Demand in Thousand Units (MWh)",
+    x = "Year"
+  )
+```
+
+## Question 2.2
+
+Use filter() to find what days corresponded to the peak closing price 
+for each of the four stocks in "gafa_stock."
+
+``` {r fpp3_2, echo = TRUE}
+peak_close <- gafa_stock %>%
+  group_by(Symbol) %>%
+  filter(Close == max(Close)) %>%
+  ungroup()
+
+peak_close %>% 
+  select(Symbol, Date, Close) %>%
+  print()
+```
+
+The peak Closing price for AAPL was 232 USD on October 3rd 2018, for AMZN it was 2040 USD on September 4th 2018, for FB it was 218 USD on July 25th 2018 and for GOOG it was 1268 USD on July 26th 2018.
+
+## Question 2.3
+
+Download the file tute1.csv from the book website, open it in Excel 
+(or some other spreadsheet application), and review its contents. You should
+find four columns of information. Columns B through D each contain a quarterly
+series, labelled Sales, AdBudget and GDP. Sales contains the quarterly 
+sales for a small company over the period 1981-2005. AdBudget is the 
+advertising budget and GDP is the gross domestic product. All series have 
+been adjusted for inflation.
+
+- You can read the data into R with the following script:
+``` {r tute1, echo = FALSE}
+tute1 <- readr::read_csv("tute1.csv")
+View(tute1)
+```
+- Convert the data to time series
+``` {r tute1_1, echo = FALSE}
+mytimeseries <- tute1 |>
+  mutate(Quarter = yearquarter(Quarter)) |>
+  as_tsibble(index = Quarter)
+```
+- Construct time series plots of each of the three series
+``` {r tute1_2, echo = TRUE}
+mytimeseries |>
+  pivot_longer(-Quarter) |>
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line() +
+  facet_grid(name ~ ., scales = "free_y")
+```
+- Check what happens when you don’t include facet_grid().
+``` {r tute1_3, echo = TRUE}
+mytimeseries |>
+  pivot_longer(-Quarter) |>
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line() 
+```
+
+Without including facet_grid( ) we are provided a plot with a common y-axis which complicates readability. Further, the lines are overlaid that makes it difficult to distinguish the individual time series, and this makes it harder to segregate them if they have similar patterns.
+
+## Question 2.4
+
+The USgas package contains data on the demand for natural gas in the US.
+a. Install the USgas package.
+b. Create a tsibble from us_total with year as the index and state as the key.
+c. Plot the annual natural gas consumption by state for the New England area 
+(comprising the states of Maine, Vermont, New Hampshire, Massachusetts, 
+Connecticut and Rhode Island).
+
+- Create tsibble from "us_total" with "year" as index and "state" as the key.
+``` {r us_total, echo = TRUE}
+tsibble_us_total <- as_tsibble(us_total, index = year, key = state)
+```
+
+- Next, filter states in the New England area.
+``` {r us_total_1, echo = TRUE}
+filter_us_total <- tsibble_us_total %>%
+  filter(state %in% c("Maine", "Vermont", "New Hampshire", 
+                      "Massachusetts", "Connecticut", "Rhode Island"))
+```
+
+- Plot the annual natural gas consumption of states in the New England area.
+``` {r us_total_2, echo = TRUE, warning = FALSE}
+filter_us_total %>%
+  ggplot(aes(x = year, y = y, color = state)) +
+  geom_line() +
+  labs(title = "Annual Natural Gas Consumption of States in the New England",
+       x = "Year",
+       y = "Consumption")
+```
+
+## Question 2.9
+
+The following time plots and ACF plots correspond to four different time series. Your task is to match each time plot in the first row with one of the ACF plots in the second row.
+
+1. B
+2. A
+3. D
+4. C
