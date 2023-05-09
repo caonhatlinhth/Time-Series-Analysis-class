@@ -1,0 +1,344 @@
+---
+title: "STAT-645-673: Homework 2  (Group 1 - Linh Cao, Manjiri Gujar, Swati Mambilavil & Colin Quinn )"
+output: html_document
+date: "May 4, 2023"
+---
+
+```{r GlobalOptions}
+options(knitr.duplicate.label = 'allow')
+```
+ 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httpuv)
+library(caTools)
+library(fpp3)
+library(USgas)
+library(ggplot2)
+library(tsibble)
+library(MASS)
+library(seasonal)
+```
+
+
+## Question 3.5
+
+For the following series, find an appropriate Box-Cox transformation in order to stabilizes the variance. Tobacco from aus_production, Economy class passengers between Melbourne and Sydney from ansett, and Pedestrian counts at Southern Cross Station from pedestrian.
+
+- Transform Tobacco
+```{r fpp3_1, echo=FALSE, message=FALSE, results='hide', warning = FALSE}
+lambda <- aus_production %>%
+  features(Tobacco, features = guerrero) %>%
+  pull(lambda_guerrero)
+aus_production %>%
+  autoplot(box_cox(Tobacco, lambda)) +
+  labs(y = "",
+   	title = latex2exp::TeX(paste0(
+     	"Transformed tobacco production with $\\lambda$ = ",
+     	round(lambda,2))))
+```
+
+- Transform Economy class passengers between Melbourne and Sydney
+```{r fpp3_2, echo = TRUE}
+eco_pass <- ansett %>%
+  filter(Airports == "MEL-SYD")%>%
+  filter(Class == "Economy")
+  eco_pass
+lambda <- eco_pass %>%
+	features(Passengers, features = guerrero) %>%
+	pull(lambda_guerrero)
+eco_pass %>%
+	autoplot(box_cox(Passengers, lambda)) +
+	labs(y = "",
+     	title = latex2exp::TeX(paste0(
+       	"Transformed Passengers with $\\lambda$ = ",
+       	round(lambda,2)))) 
+```
+
+-  Transform Pedestrian counts at Southern Cross Station
+```{r fpp3_3, echo = TRUE}
+ped_count <- pedestrian %>%
+  filter(Sensor == "Southern Cross Station")
+  ped_count
+lambda <- ped_count %>%
+  features(Count, features = guerrero) %>%
+  pull(lambda_guerrero)
+ped_count %>%
+  autoplot(box_cox(Count, lambda)) +
+  labs(y = "",
+     	title = latex2exp::TeX(paste0(
+       	"Transformed Pedestrians count with $\\lambda$ = ",
+       	round(lambda,2))))
+```
+
+## Question 3.6
+
+Show that a 3 × 5 MA is equivalent to a 7-term weighted moving average with weights of 0.067, 0.133, 0.200, 0.200, 0.200, 0.133, and 0.067.
+
+---
+To show a 3 x 5 MA is equivalent to a 7-term weighted moving average. We calculate with the weights of 0.067, 0.133, 0.200, 0.200, 0.200, 0.133, and 0.067.
+
+First, we define 3x5 MA as follows:
+
+y_t=(x_t-2 +x_t-1+x_t+x_t+1+x_t+2)/5
+
+where y_t is the value of the moving average at time t, and x_t is the value of the time series at time t.
+
+Now, calculating the weights by multiplying each value in the moving average by its respective weight and summing the results. Further we compare the calculation with the given weights
+y_t = (0.067_t-2 + 0.133x_t-1 + 0.2x_t + 0.2x_t+1 + 0.2x_t+2 + 0.133x_t+3 + 0.067*x_t+4)
+
+We can see that the weights of the 3x5 MA match the given weights, which means that a 3x5 MA is equivalent to a 7-term weighted moving average with weights of 0.067, 0.133, 0.200, 0.200, 0.200, 0.133, and 0.067
+
+## Question 3.10
+
+This exercise uses the canadian_gas data (monthly Canadian gas production in billions of cubic metres, January 1960 – February 2005).
+
+
+a. Plot the data using autoplot(), gg_subseries() and gg_season() to look at the effect of the changing seasonality over time.
+
+- Plot the data using autoplot
+
+```{r fpp4, echo=TRUE, message=FALSE}
+
+autoplot(canadian_gas)
+
+```
+
+- Plot the data using gg_subseries
+
+```{r fpp5, echo=TRUE, message=FALSE}
+gg_subseries(canadian_gas)
+```
+
+- Plot the data using gg_season
+```{r fpp6, echo=TRUE, message=FALSE}
+gg_season(canadian_gas)
+
+```
+
+b. Do an STL decomposition of the data. You will need to choose a seasonal window to allow for the changing shape of the seasonal component.
+
+```{r fpp3_7, echo=TRUE, message=FALSE}
+stl_canadian_gas <- canadian_gas %>%
+  model(
+    STL(Volume ~ trend(window = 13) +
+          season(window = "periodic"),
+        robust = TRUE)
+  ) %>%
+  components()
+
+autoplot(stl_canadian_gas)
+```
+
+c. How does the seasonal shape change over time? [Hint: Try plotting the seasonal component using gg_season().]
+
+The seasonality becomes stronger and has increasing trend in two periods: The pink (1999 - 2005) and orange (1960 - 1969) lines show the increase in the gas volume between March and October. However, the seasonality being shown in green and blue lines are more stable.
+
+```{r fpp3_8, echo=TRUE, message=FALSE}
+stl_canadian_gas %>% gg_season(season_adjust)
+
+```
+
+d. Can you produce a plausible seasonally adjusted series?
+
+```{r fpp3_9, echo=TRUE, message=FALSE}
+stl_canadian_gas %>% 
+  autoplot(season_adjust)
+```
+
+e. Compare the results with those obtained using SEATS and X-11. How are they different? 
+
+- Decomposition with SEATS
+
+```{r fpp3_10, echo=TRUE, message=FALSE}
+seats_dcmp <- canadian_gas %>%
+  model(seats = X_13ARIMA_SEATS(Volume ~ seats())) %>%
+  components()
+autoplot(seats_dcmp) +
+  labs(title =
+         "Decomposition of Canadian Gas using SEATS")
+```
+
+- Decomposition with X-11
+
+```{r fpp3_11, echo=TRUE, message=FALSE}
+x11_dcmp <- canadian_gas %>%
+  model(x11 = X_13ARIMA_SEATS(Volume ~ x11())) %>%
+  components()
+autoplot(x11_dcmp) +
+  labs(title =
+         "Decomposition of Canadian Gas using X-11")
+```
+
+
+The trend and volume lines while using both X-11 and SEATS are similar while the remainder components are different. SEATS detect irregular fluctuations better while X-11 identify the seasonality better.
+
+## Question 5.8
+
+Consider the number of pigs slaughtered in New South Wales (data set aus_livestock).Produce some plots of the data in order to become familiar with it.
+
+a. Create a training set of 486 observations, withholding a test set of 72 observations (6 years).
+
+```{r fpp3_12, echo=TRUE, message=FALSE}
+pigs_NSW <- aus_livestock %>%
+  filter(Animal == "Pigs", State == "New South Wales") %>%
+  autoplot(Count) +
+  labs (y = "NUmber of Pigs", title = "Pigs slaughtered in New South Wales, Australia")
+
+pigs_NSW
+
+```
+
+b. Try using various benchmark methods to forecast the training set and compare the results on the test set. Which method did best?
+
+```{r fpp3_13, echo=TRUE, message=FALSE}
+
+train_pigs <- aus_livestock %>%
+  filter(Animal == "Pigs", State == "New South Wales")%>%
+  filter_index("1972 Jul" ~ "2012 Dec")
+test_pigs <- aus_livestock %>%
+  filter(Animal == "Pigs", State == "New South Wales")%>%
+  filter_index("2013 Jan" ~ "2019 Dec")
+
+```
+
+c. Check the residuals of your preferred method. Do they resemble white noise?
+
+Based on the accuracy table the Drift model performed the best between the 4 benchmark models used.
+
+```{r fpp3_14, echo=TRUE, message=FALSE}
+
+pigs_fit <- train_pigs %>%
+  model(
+	'Mean' = MEAN(Count),
+	'Naïve' = NAIVE(Count),
+	'Seasonal naïve' = SNAIVE(Count),
+	'Drift' = RW(Count ~ drift())
+  )
+
+#Generate forecasts
+pigs_fc <- pigs_fit %>% forecast(h = 72)
+
+# Plot the forecasts against actual values
+
+pigs_fc %>%
+  autoplot(train_pigs, level = NULL) +
+  autolayer(
+  filter_index(aus_livestock, "2019 Dec" ~ .),
+  colour = "black"
+  ) +
+  labs(
+	y = "Number of pigs",
+	title = "Forecasts for number of pigs slaughtered in New South Wales"
+  ) +
+  guides (colour = guide_legend(title = "Forecasts"))
+
+
+```
+
+d. Check the residuals of your preferred method. Do they resemble white noise?
+
+The residual plot does not resemble white noise. We conducted ACF and plotted the same. From the ACF we can observe that not all of the autocorrelations are zero, hence the residual plot does not resemble white noise.
+
+```{r fpp3_15, echo=TRUE, message=FALSE, warning=FALSE}
+
+pigs_fit <- train_pigs %>%
+  model('Seasonal naïve' = SNAIVE(Count)) %>%
+  augment()
+autoplot(pigs_fit, .innov) +
+  labs(y = "Number of pigs",
+   	title = "Residuals for the naive method")
+
+```
+
+
+## Question 5.10
+
+- Filter and summarize the data
+
+```{r fpp3_16, echo=TRUE, message=FALSE, warning=FALSE}
+
+takeaway_aus <- aus_retail %>%
+  filter(Industry == "Takeaway food services") %>%
+  #group_by(month(Month)) %>%
+  summarise(Total_Turnover = sum(Turnover)) %>%
+  arrange(year(Month), month(Month))
+
+```
+
+a. Create a training set for Australian takeaway food turnover (aus_retail) by withholding the last four years as a test set.
+
+```{r fpp3_17, echo=TRUE, message=FALSE, warning=FALSE}
+
+train_takeaway <- takeaway_aus %>%
+  filter(Month >= yearmonth("1982 Apr") & Month <= yearmonth("2014 Dec"))
+as_tsibble(train_takeaway)
+
+test_takeaway <- takeaway_aus %>%
+  filter(Month >= yearmonth("2015 Jan") & Month <= yearmonth("2018 Dec"))
+class(test_takeaway)
+as_tsibble(test_takeaway)
+
+```
+
+b. Fit all the appropriate benchmark methods to the training set and forecast the periods covered by the test set.
+
+```{r fpp3_18, echo=TRUE, message=FALSE, warning=FALSE}
+
+takeaway_fit <- train_takeaway %>%
+  model(
+	Mean = MEAN(Total_Turnover),
+	Naive = NAIVE(Total_Turnover),
+	Seasonal_naive = SNAIVE(Total_Turnover),
+	Drift = RW(Total_Turnover ~ drift())
+  )
+
+# Generate forecasts
+takeaway_fc <- takeaway_fit %>% forecast(h = 48)
+class(takeaway_fc)
+as_tsibble(takeaway_fc)
+
+```
+
+c. Compute the accuracy of your forecasts. Which method does best?
+
+Based on the the accuracy table, the Drift model performed the best between the 4 benchmark models used.
+
+```{r fpp3_19, echo=TRUE, message=FALSE}
+
+# Calculate accuracy for all benchmark models
+acc <- accuracy(takeaway_fc, test_takeaway)
+print(acc)
+
+# Determine which method performs best
+best_method <- acc %>% 
+  filter(.model == min(.model)) %>% pull(.model)
+
+cat("The best method is:", best_method, "\n")
+
+```
+
+d. Do the residuals from the best method resemble white noise? 
+
+The residual plot does not resemble white noise. We conducted ACF and plotted the same. From the ACF we can observe that not all of the autocorrelations are zero, hence the residual plot does not resemble white noise.
+
+```{r fpp3_20, echo=TRUE, message=FALSE}
+
+#plotting the residuals
+
+takeaway_fit <- train_takeaway %>%
+  model('Drift' = RW(Total_Turnover ~ drift())) %>%
+  augment()
+takeaway_fit
+
+autoplot(takeaway_fit, .resid) +
+  labs(y = "Takeaway service turnover for Australia",
+   	title = paste("Residuals for the", best_method, "method"))
+
+takeaway_fit %>%
+  ACF(.resid) %>%
+  autoplot() + labs(title = "ACF of Residuals")
+
+```
+
+
