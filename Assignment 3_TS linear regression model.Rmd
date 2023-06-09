@@ -1,0 +1,146 @@
+---
+title: "STAT645-673_Group_Assignment_3_Spring20231"
+output: html_document
+date: "2023-05-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(fpp3)
+library(fable)
+library(forecast)
+
+?global_economy
+data("global_economy")
+global_economy
+```
+
+**Q7.6**
+
+```{r}
+Afg_pop <- global_economy |>
+  filter(Country == "Afghanistan")
+```
+
+a)
+
+```{r}
+Afg_pop|>
+  autoplot(Population)
+
+Afg_pop |>
+  model(STL(Population))|>
+  components(Afg_pop)|>
+  autoplot()
+
+```
+
+There is no seasonal component in the Afghanistan Population data set. There is an observable downward trend in the population during the time of the Soviet-Afghan war, but overall there is an upward trend to the data.
+
+b)
+
+```{r}
+fit <- Afg_pop |>
+  model(linear = TSLM(Population ~ trend()),
+        piecewise = TSLM(Population ~ trend(knots = c(1980, 1989))))
+fc <- fit |>
+  forecast(h=5)
+Afg_pop |>
+  autoplot(Population)+
+  geom_line(data = fitted(fit),
+            aes(y= .fitted, color = .model)) +
+  autolayer(fc, alpha =0.5, level = 95) +
+  labs(y = "Population",
+       title = "Population of Afghanistan")
+```
+
+c)
+
+```{r}
+Afg_pop |>
+  model(TSLM(Population ~ trend()),
+        TSLM(Population ~ trend(knots = c(1980, 1989)))) |>
+  forecast(h=5)|>
+  autoplot(Afg_pop, level = NULL) +
+  labs(title = "Population of Afghanistan") +
+  guides(colour = guide_legend(title = "Forecast"))
+```
+
+The piece-wise model handles the change of slope during the time of the Afghan-Soviet war, unlike the linear model. When comparing the forecasts from both the models we observe that better forecasts come from the piecewise-linear model. 
+
+**Q8.6**
+
+```{r}
+china_gdp <- global_economy|>
+  filter(Country == "China")
+china_gdp|>
+  autoplot(GDP)
+```
+
+```{r}
+china_gdp|>
+  model(STL(GDP))|>
+  components(china_gdp)|>
+  autoplot()
+```
+
+```{r}
+lambda <- china_gdp |> 
+  features(GDP, features = guerrero) |> 
+  pull(lambda_guerrero)
+round(lambda, 4)
+```
+
+Fit ETS models with different options with and without Box-Cox transformations
+
+```{r}
+
+china_fit <- china_gdp %>%
+  model(
+    "Simple" = ETS(GDP ~ error("A") + trend("N") + season("N")),
+    "Holt's Method" = ETS(GDP ~ error("A") + trend("A") + season("N")),
+    "Damped Holt's Method" = ETS(GDP ~ error("A") + trend("Ad", phi = 0.8) + season("N")),
+    "Transformed SES" = ETS(box_cox(GDP, lambda) ~ error("A") + trend("N") + season("N")),
+    "Transformed Holt" = ETS(box_cox(GDP, lambda) ~ error("A") + trend("A") + season("N")),
+    "Transformed Damped" = ETS(box_cox(GDP, lambda) ~ error("A") + trend("Ad") + season("N"))
+  )
+```
+
+Forecast and plot the fitted values and forecasts of the GDP using the fitted models
+
+```{r}
+china_forecast <- china_fit %>%
+  forecast(h = 20)
+
+# Plot the fitted values and forecasts
+china_forecast %>%
+  autoplot(china_gdp, level = NULL) +
+  labs(title = "China's GDP",
+       y = "GDP") +
+  guides(colour = guide_legend(title = "Forecast"))
+```
+
+The Simple Exponential Smoothing, Damped Holt's Method and Transformed SES are flat and do not reflect the growth in China's GDP as accurately. On the other hand Transformed Holt's method, Transformed Damped Holt's method and Holt's method without box-cox transformation tend to reflect the growth. While we can observe that the forecasts from  Transformed Damped Holt's method and Holt's method are on the conservative side even though they do reflect realistic growth. 
+
+**Final project data set selection and approach:**
+
+The global internet users data was chosen for our final project:
+
+1. The data is not only for countries, it is also categorized by geographic regions and income. Therefore, we decided to divide data into 4 subset: country_data, region_data, world_data, and income_data. 
+
+2. There is no missing data
+
+3. Our analysis has 4 main sections:
+- Data clean and data exploration
+- Data pre-processing
+- Model fitting & Prediction & Evaluation
+- Conclusion.
+
+4. When analyzing the data, our main purpose is witness the change of number of internet users in the world, specific regions and group of countries by income. Arm with these analysis, we can define which countries have the highest internet development over more than 30 years since 90s and the trend of internet worldwide.
+
+
+
