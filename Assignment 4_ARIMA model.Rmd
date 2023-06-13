@@ -1,0 +1,194 @@
+---
+title: "STAT-645-673: Homework 4  (Group 1 - Linh Cao, Manjiri Gujar, Swati Mambilavil & Colin Quinn )"
+output: html_document
+date: "June 10, 2023"
+---
+
+```{r GlobalOptions}
+options(knitr.duplicate.label = 'allow')
+```
+ 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp3)
+library(tsibble)
+library(fabletools)
+library(tidyr)
+```
+
+## Filtering the data
+```{r fpp3_4, echo=FALSE, message=FALSE, results='hide', warning = FALSE}
+us_private <- us_employment |>
+  filter(Title == "Total Private")
+head(us_private)
+us_private |>
+  autoplot(Employed)
+```
+
+## Question 9.10 a
+a.Produce an STL decomposition of the data and describe the trend and seasonality.
+
+- Computing STL decomposition
+```{r fpp3_5, echo=FALSE, message=FALSE, results='hide', warning = FALSE}
+us_stl <- us_private %>%
+  model(STL(Employed))
+components(us_stl) %>%
+  autoplot()
+```
+The decomposition shows an increasing trend component.
+The seasonality can be seen in a yearly pattern with regular fluctuations
+
+## Question 9.10 b
+
+b.Do the data need transforming? If so, find a suitable transformation.
+
+After visual inspection of the plot, 
+there is change in the variance which is evident but it is not severe. 
+Hence, the data does not need transformation.
+
+## Question 9.10 c
+
+c.Are the data stationary? If not, find an appropriate differencing which yields stationary data.
+
+```{r fpp3_6, echo=FALSE, message=FALSE, results='hide', warning = FALSE}
+us_private %>%
+  ACF(Employed) %>%
+  autoplot() + labs(subtitle = "Employment in Private sector in US")
+
+us_private %>%
+  ACF(difference(Employed)) %>%
+  autoplot() + labs(subtitle = "Difference in Employment in Private sector in US")
+
+us_private %>%
+  features(Employed,unitroot_kpss)
+
+us_private %>%
+  features(Employed,unitroot_ndiffs)
+
+us_private %>%
+  features(Employed,unitroot_nsdiffs)
+
+us_private %>%
+  features(difference(Employed),unitroot_kpss)
+
+us_private %>%
+  gg_tsdisplay(difference(Employed), plot_type='partial')
+```
+
+The data are not stationary. 
+We find the right degree of differencing by performing a sequence of unitroot tests.
+We found that the trend component needs differencing once and the seasonal component needs differencing once to become stationary.
+
+
+## Question 9.10 d
+
+d.Identify a couple of ARIMA models that might be useful in describing the time series. Which of your models is the best according to their AICc values?
+
+```{r fpp4, echo=TRUE, message=FALSE}
+
+arima_us <- us_private %>%
+  model("fit1" = ARIMA(Employed ~ pdq(0,1,0)),
+        "fit2" = ARIMA(Employed ~ pdq(1,1,0)),
+        "fit3" = ARIMA(Employed ~ pdq(0,1,2)),
+        "fit4" = ARIMA(Employed),
+        "fit5" = ARIMA(Employed, stepwise = FALSE),
+        "fit6" = ARIMA(Employed ~ pdq(2,1,1)))
+arima_us
+
+```
+
+For the current data set, the model with the lowest AICc i.e. fit6 = ARIMA(2,1,1)(0,1,2)[12] is the best fitting model.
+
+## Question 9.10 e
+
+e.Estimate the parameters of your best model and do diagnostic testing on the residuals. Do the residuals resemble white noise? If not, try to find another ARIMA model which fits better.
+
+```{r fpp5, echo=TRUE, message=FALSE}
+
+arima_us %>% pivot_longer(!Series_ID, names_to = "Model Name", values_to = "Orders")
+glance(arima_us) %>% arrange(AICc)
+
+arima_us%>%
+  select(fit6)%>%
+  report()
+
+arima_us %>% 
+  select(fit6) %>% 
+  gg_tsresiduals()
+
+augment(arima_us) %>%
+  filter(.model=='fit6') %>%
+  features(.innov, ljung_box, lag = 12, dof = 3)
+```
+
+-As per the residual diagnostics and the Ljung-box test, the residuals resemble white noise.
+-The p-value of the Ljung-box test is 0.125 which is greater than 0.05. 
+-Hence, we accept the null hypothesis and conclude that the residuals resemble white noise.
+
+## Question 9.10 f
+
+f. Forecast the next 3 years of data. Get the latest figures from https://fred.stlouisfed.org/categories/11 to check the accuracy of your forecasts.
+
+- Reading the data
+```{r fpp_4, echo=TRUE, message=FALSE}
+data_raw <- read.csv('CEU0500000001.csv', header = TRUE)
+
+```
+
+- Adding columns
+```{r fpp6, echo=TRUE, message=FALSE}
+data_raw <- data_raw %>%
+  add_column(Series_ID = "CEU0500000001", .after = 1) %>%
+  add_column(Title = "Total Private", .after = 2)
+
+```
+
+- Changing the column names
+```{r fpp7, echo=TRUE, message=FALSE}
+colnames(data_raw) <- c("Month", "Series_ID", "Title", "Employed")
+
+```
+
+- Converting the data type of the column Month
+```{r fpp8, echo=TRUE, message=FALSE}
+data_raw$Month <- as.Date(data_raw$Month)
+
+```
+
+-Converting the data into a tsibble
+
+```{r fpp9, echo=TRUE, message=FALSE}
+test_ts <- data_raw %>%
+  mutate(Month = yearmonth(Month)) %>%
+  as_tsibble(index = Month, key = Series_ID)
+
+```
+
+-Fitting the ARIMA model
+
+```{r fpp_1, echo=TRUE, message=FALSE}
+arima_fc <- arima_us %>%
+  select(fit6)%>%
+  forecast(h = 36)
+fabletools::accuracy(arima_fc, test_ts)
+arima_fc
+
+```
+## Question 9.10 g
+g.Eventually, the prediction intervals are so wide that the forecasts are not particularly useful. How many years of forecasts do you think are sufficiently accurate to be usable?
+
+```{r fpp_2, echo=TRUE, message=FALSE}
+fit <- arima_us %>%
+  select(fit6)
+fit
+us_private %>%
+  model(ARIMA(Employed ~ pdq(2,1,1) + PDQ(0,1,2))) %>%
+  forecast() %>%
+  autoplot(us_private) + 
+  labs(title = "Employment in Private sector in US")
+
+```
+
+-Based on the above plot we can observe that the prediction intervals beyond approximately beyond 12 months start becoming wider and keep growing into the future (also our d = 1).
+-Hence, the forecasts for approximately the next 12 months with narrow prediction intervals i.e. where the residuals will tend to resemble white noise, are usable.
+
